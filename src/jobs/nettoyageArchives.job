@@ -1,0 +1,51 @@
+'use strict';
+
+const { Op }       = require('sequelize');
+const { RendezVous, SystemJob } = require('../models');
+const { STATUT_RDV, STATUT_JOB, TYPE_TACHE } = require('../utils/constants.util');
+const { logger }   = require('../utils/logger.util');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Job : nettoyage_archives
+// 1. Archive les RDV confirmés dont la date est dépassée depuis > 30 jours
+// 2. Purge les system_jobs terminés (succès/échec) vieux de > 7 jours
+// Déclenché par scheduler.js chaque nuit à 02h00.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ARCHIVE_APRES_JOURS = 30;
+const PURGE_JOBS_APRES_JOURS = 7;
+
+async function run() {
+  logger.info('[JOB] nettoyageArchives — démarrage');
+
+  const dateArchive = new Date();
+  dateArchive.setDate(dateArchive.getDate() - ARCHIVE_APRES_JOURS);
+
+  // 1. Archiver les RDV confirmés anciens (statut logique — pas de suppression)
+  const [archivesCount] = await RendezVous.update(
+    { statut_rdv: STATUT_RDV.ARCHIVE, date_archivage: new Date() },
+    {
+      where: {
+        statut_rdv    : STATUT_RDV.CONFIRME,
+        date_heure_rdv: { [Op.lt]: dateArchive },
+      },
+    }
+  );
+  logger.info(`[JOB] nettoyageArchives — ${archivesCount} RDV archivé(s)`);
+
+  // 2. Purger les system_jobs terminés
+  const datePurge = new Date();
+  datePurge.setDate(datePurge.getDate() - PURGE_JOBS_APRES_JOURS);
+
+  const purgeCount = await SystemJob.destroy({
+    where: {
+      statut                : { [Op.in]: [STATUT_JOB.SUCCES, STATUT_JOB.ECHEC] },
+      date_execution_prevue : { [Op.lt]: datePurge },
+      type_tache            : TYPE_TACHE.ENVOYER_RAPPEL,
+    },
+  });
+  logger.info(`[JOB] nettoyageArchives — ${purgeCount} job(s) purgé(s)`);
+  logger.info('[JOB] nettoyageArchives — terminé');
+}
+
+module.exports = { run };

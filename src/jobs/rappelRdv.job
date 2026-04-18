@@ -1,0 +1,87 @@
+'use strict';
+
+const { Op } = require('sequelize');
+const { RendezVous, Utilisateur, Medecin, SystemJob } = require('../models');
+const { envoyerRappelRdv } = require('../services/email.service');
+const { STATUT_RDV, STATUT_JOB, TYPE_TACHE } = require('../utils/constants.util');
+const { logger } = require('../utils/logger.util');
+
+async function run() {
+  logger.info('[JOB] rappelRdv - demarrage');
+
+  const jobs = await SystemJob.findAll({
+    where: {
+      type_tache: TYPE_TACHE.ENVOYER_RAPPEL,
+      statut: STATUT_JOB.ATTENTE,
+      date_execution_prevue: { [Op.lte]: new Date() },
+    },
+    order: [['date_execution_prevue', 'ASC']],
+    limit: 50,
+  });
+
+  logger.info(`[JOB] rappelRdv - ${jobs.length} job(s) a traiter`);
+
+  for (const job of jobs) {
+    try {
+      await job.increment('nombre_tentatives');
+
+      const { id_rdv } = job.parametres || {};
+      if (!id_rdv) {
+        await job.update({ statut: STATUT_JOB.ECHEC });
+        continue;
+      }
+
+      const rdv = await RendezVous.findByPk(id_rdv, {
+        include: [
+          {
+            model: Utilisateur,
+            as: 'patient',
+            include: [{ model: Utilisateur, as: 'utilisateur', attributes: ['nom', 'prenom', 'email'] }],
+          },
+          {
+            model: Medecin,
+            as: 'medecin',
+            include: [{ model: Utilisateur, as: 'utilisateur', attributes: ['nom', 'prenom'] }],
+          },
+        ],
+      });
+
+      if (!rdv || rdv.statut_rdv === STATUT_RDV.ANNULE || rdv.statut_rdv === STATUT_RDV.REFUSE) {
+        await job.update({ statut: STATUT_JOB.ECHEC });
+        continue;
+      }
+
+      const patient = rdv.patient?.utilisateur;
+      const medecin = rdv.medecin?.utilisateur;
+      const dateRdv = new Date(rdv.date_heure_rdv);
+
+      const result = await envoyerRappelRdv({
+        id_user: rdv.id_patient,
+        id_rdv: rdv.id_rdv,
+        emailDestinataire: patient?.email,
+        data: {
+          nomPatient: `${patient?.prenom || ''} ${patient?.nom || ''}`.trim(),
+          nomMedecin: `${medecin?.prenom || ''} ${medecin?.nom || ''}`.trim(),
+          dateRdv: dateRdv.toLocaleDateString('fr-FR'),
+          heureRdv: dateRdv.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          nomService: 'Clinique',
+        },
+      });
+
+      await job.update({ statut: STATUT_JOB.SUCCES });
+
+      if (result.delivery?.skipped) {
+        logger.info(`[JOB] rappelRdv - RDV #${id_rdv} : notification creee, email non envoye (${result.delivery.reason})`);
+      } else {
+        logger.info(`[JOB] rappelRdv - RDV #${id_rdv} : rappel email envoye a ${patient.email}`);
+      }
+    } catch (err) {
+      logger.error(`[JOB] rappelRdv - Erreur job #${job.id_job} :`, err.message);
+      await job.update({ statut: STATUT_JOB.ECHEC });
+    }
+  }
+
+  logger.info('[JOB] rappelRdv - termine');
+}
+
+module.exports = { run };
