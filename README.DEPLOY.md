@@ -1,61 +1,60 @@
-# 🚀 Déploiement Render - Checklist Production
+# 🚀 Render + Railway MySQL Deployment Guide
 
-## 1. Préparation Git
+## **1. Render Dashboard**
 ```
-git add .
-git commit -m "feat: production audit complete"
-git push origin main
+Service Type: Web Service
+Repository: GitHub
+Build Command: npm ci
+Start Command: npx sequelize-cli db:migrate && node src/app.js
+Instance Type: Starter (€7)
+Disks: Name=uploads, Size=10GB, Mount=/opt/render/disks/uploads
 ```
 
-## 2. Render Dashboard
+## **2. Railway MySQL Env Vars**
+```
+DB_HOST=roundhouse.proxy.rlwy.net
+DB_PORT=42618
+DB_USER=root
+DB_PASSWORD=...
+DB_NAME=railway
+MYSQL_URL=mysql://root:...@roundhouse.proxy.rlwy.net:42618/railway
+```
 
-- **New Web Service** → GitHub repo
-- **Build**: `npm ci --prod && npm prune --prod`
-- **Start**: `node src/app.js`
-- **Plan**: Starter ($7/mo)
-
-## 3. Environment Variables (env.prod.example → Render)
+## **3. Render Env Vars (Railway)**
 ```
 NODE_ENV=production
 PORT=10000
-
-DB_HOST=mysql-xxx.onrender.com
-DB_PORT=3306  
-DB_NAME=clinique_prod
-DB_USER=...
-DB_PASSWORD=...
-
-REDIS_URL=redis://red-xxx.upstash.io:...
-JWT_SECRET=$(openssl rand -base64 64)
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=$(openssl rand -base64 64)
-JWT_REFRESH_EXPIRES_IN=30d
-JWT_BLACKLIST_SECRET=$(openssl rand -base64 32)
-
-CORS_ORIGINS=https://your-frontend.onrender.com
-LOG_LEVEL=warn
-MAIL_ENABLED=true
-MAIL_TOKEN=...
+DB_HOST=roundhouse.proxy.rlwy.net
+DB_PORT=42618
+DB_USER=root
+DB_PASSWORD=your_railway_pass
+DB_NAME=railway
+REDIS_URL=...
+JWT_SECRET=openssl rand -base64 64
 RENDER_DISK_PATH=/opt/render/disks/uploads
-
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_AUTH=5
-RATE_LIMIT_MAX_API=200
+CORS_ORIGINS=https://your-frontend.onrender.com
 ```
 
-## 4. Render Disk (Uploads)
-- Add Disk → Mount Path: `/opt/render/disks`
-- Size: 10GB Starter
-
-## 5. Test Post-Deploy
+## **4. Test Deploy**
 ```
-curl https://your-api.onrender.com/api/v1/health  # DB/Redis OK
-curl -X POST /api/v1/auth/login -d '{"login":"admin","password":"Admin1234!"}'
+1. Deploy → View Logs
+2. Wait migrations (60s max)
+3. /api/v1/health → 200 OK
+4. POST /auth/login → JWT OK
 ```
 
-## 6. Monitoring
-- Render Logs → JSON Winston format
-- Health checks automatiques OK
+## **5. Monitoring**
+```
+Logs Render → Winston JSON
+Health: /api/v1/health
+Metrics: Railway dashboard
+```
 
-✅ **Production Ready - 0 downtime deploy**
+## **6. Scale**
+```
+Horizontal: 2 instances
+DB: Railway 10GB
+Disk: Render 50GB
+CDN: Uploads via Cloudflare
+```
 
