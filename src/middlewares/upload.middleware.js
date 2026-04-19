@@ -1,91 +1,79 @@
 'use strict';
 
-const cloudStorage = require('../services/cloudStorage.service');
 const multer = require('multer');
+const { upload } = require('../config/multer');
+const { upload: uploadCfg } = require('../config/env');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Middleware Upload
-//
-// Enveloppe les instances Multer de config/multer.js pour centraliser
-// la gestion des erreurs et produire des réponses JSON cohérentes.
-//
-// Correspondance avec les champs SQL :
-//   handlePhotoUpload   → utilisateurs.photo_path
-//   handleLogoUpload    → clinique.logo_path
-//   handleServiceUpload → services.image_path
-//
-// Après exécution, le controller récupère :
-//   req.file.path     → chemin relatif à stocker dans *_path
-//   req.file.filename → nom du fichier généré
-//   req.file.size     → taille en octets
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Wrapper générique ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Wrapper Multer propre
+// ─────────────────────────────────────────────
 
 function wrapMulter(multerMiddleware, fieldName) {
   return (req, res, next) => {
     multerMiddleware(req, res, (err) => {
       if (!err) return next();
 
-      // Erreurs Multer natives
+      // Multer errors
       if (err instanceof multer.MulterError) {
-        switch (err.code) {
-          case 'LIMIT_FILE_SIZE':
-            return res.status(413).json({
-              success: false,
-              message: `Fichier trop volumineux. Taille maximale autorisée : ${
-                require('../config/env').upload.maxSizeMb
-              } Mo.`,
-              code: 'FILE_TOO_LARGE',
-            });
-          case 'LIMIT_UNEXPECTED_FILE':
-            return res.status(400).json({
-              success: false,
-              message: err.message || `Champ de fichier inattendu. Utilisez le champ "${fieldName}".`,
-              code   : 'UNEXPECTED_FILE_FIELD',
-            });
-          default:
-            return res.status(400).json({
-              success: false,
-              message: `Erreur upload : ${err.message}`,
-              code   : 'UPLOAD_ERROR',
-            });
-        }
-      }
+        const errors = {
+          LIMIT_FILE_SIZE: {
+            status: 413,
+            code: 'FILE_TOO_LARGE',
+            message: `Fichier trop volumineux. Max ${uploadCfg.maxSizeMb} Mo`,
+          },
+          LIMIT_UNEXPECTED_FILE: {
+            status: 400,
+            code: 'UNEXPECTED_FILE_FIELD',
+            message: `Champ attendu : ${fieldName}`,
+          },
+        };
 
-      // Erreur MIME (levée par mimeFilter dans config/multer.js)
-      if (err && err.message?.includes('Type MIME non autorisé')) {
-        return res.status(415).json({
+        const error = errors[err.code];
+
+        return res.status(error?.status || 400).json({
           success: false,
-          message: err.message,
-          code   : 'INVALID_MIME_TYPE',
+          message: error?.message || err.message,
+          code: error?.code || 'UPLOAD_ERROR',
         });
       }
 
-      // Erreur inconnue
+      // MIME error
+      if (err?.message?.includes('MIME')) {
+        return res.status(415).json({
+          success: false,
+          message: err.message,
+          code: 'INVALID_MIME_TYPE',
+        });
+      }
+
       return res.status(500).json({
         success: false,
-        message: 'Erreur interne lors du traitement du fichier.',
-        code   : 'UPLOAD_INTERNAL_ERROR',
+        message: 'Erreur upload serveur',
+        code: 'UPLOAD_INTERNAL_ERROR',
       });
     });
   };
 }
 
-// ── Middlewares exportés ──────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Upload middlewares
+// ─────────────────────────────────────────────
 
-// Pour les routes : router.put('/:id/photo', handlePhotoUpload, controller.update)
-const handlePhotoUpload   = cloudStorage.photoUpload;
-const handleLogoUpload    = cloudStorage.logoUpload;
-const handleServiceUpload = cloudStorage.serviceUpload;
+const handlePhotoUpload   = wrapMulter(upload.photo, 'photo');
+const handleLogoUpload    = wrapMulter(upload.logo, 'logo');
+const handleServiceUpload = wrapMulter(upload.service, 'image');
 
-// ── Helper : normalise le chemin stocké en base ───────────────────────────────
-// Transforme le chemin absolu du disque en chemin relatif pour *_path SQL
-// ex: /home/user/project/uploads/photos/uuid.jpg → uploads/photos/uuid.jpg
+// ─────────────────────────────────────────────
+// Path normalisation (DB safe)
+// ─────────────────────────────────────────────
 
 function getRelativePath(req) {
   if (!req.file) return null;
-  return req.file.path.replace(/\\/g, '/'); // Normalise les séparateurs Windows
+
+  return req.file.path
+    .replace(/\\/g, '/')
+    .split('uploads/')
+    .pop();
 }
 
 module.exports = {
