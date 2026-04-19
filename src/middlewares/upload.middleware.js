@@ -1,6 +1,6 @@
 'use strict';
 
-const { uploadPhoto, uploadLogo, uploadService } = require('../config/multer');
+const cloudStorage = require('../services/cloudStorage.service');
 const multer = require('multer');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,9 +75,9 @@ function wrapMulter(multerMiddleware, fieldName) {
 // ── Middlewares exportés ──────────────────────────────────────────────────────
 
 // Pour les routes : router.put('/:id/photo', handlePhotoUpload, controller.update)
-const handlePhotoUpload   = wrapMulter(uploadPhoto.single('photo'),     'photo');
-const handleLogoUpload    = wrapMulter(uploadLogo.single('logo'),       'logo');
-const handleServiceUpload = wrapMulter(uploadService.single('image'),   'image');
+const handlePhotoUpload   = cloudStorage.photoUpload;
+const handleLogoUpload    = cloudStorage.logoUpload;
+const handleServiceUpload = cloudStorage.serviceUpload;
 
 // ── Helper : normalise le chemin stocké en base ───────────────────────────────
 // Transforme le chemin absolu du disque en chemin relatif pour *_path SQL

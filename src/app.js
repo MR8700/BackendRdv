@@ -122,13 +122,16 @@ app.use(errorHandler);
 
 async function start() {
   await connectDB();
+  await connectRedis(); // Redis pour JWT/RateLimit
   await verifyMailer();
   startScheduler();
+  if (NODE_ENV === 'production') env.checkProductionEnv();
+  
   server = app.listen(PORT, () => {
-    logger.info(`Serveur demarre sur http://localhost:${PORT}${API_PREFIX}`);
-    logger.info(`Environnement : ${NODE_ENV}`);
+    logger.info(`Serveur démarré: http://0.0.0.0:${PORT}${API_PREFIX}`, { env: NODE_ENV });
   });
 }
+
 
 async function shutdown(signal) {
   logger.warn(`[APP] Signal ${signal} recu, arret en cours...`);

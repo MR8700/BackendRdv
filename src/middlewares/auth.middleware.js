@@ -97,7 +97,7 @@ function authenticateOptional(req, res, next) {
 }
 
 // Add Redis getRedis from token.service
-const { getRedis } = require('../services/token.service');
+const { getRedis } = require('../config/redis');
 const logger = require('../utils/prodLogger').logger;
 
 module.exports = { authenticate, authenticateOptional };

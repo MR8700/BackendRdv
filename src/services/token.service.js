@@ -7,17 +7,11 @@ const logger = require('../utils/prodLogger').logger;
 
 let redisClient;
 
-async function getRedis() {
-  if (!redisClient) {
-    redisClient = Redis.createClient({
-      url: render.redisUrl
-    });
-    redisClient.on('error', err => logger.error('[REDIS] Connection error', err));
-    await redisClient.connect();
-    logger.info('[REDIS] Connected for JWT blacklist');
-  }
-  return redisClient;
-}
+// Use centralized Redis
+const { getRedis } = require('../config/redis');
+
+// Remove local getRedis - use global
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────

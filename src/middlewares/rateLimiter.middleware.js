@@ -9,19 +9,16 @@ const logger = require('../utils/prodLogger').logger;
 
 let redisStore;
 
-async function getRedisStore() {
-  if (!redisStore) {
-    const Redis = require('redis');
-    const client = Redis.createClient({ url: render.redisUrl });
-    client.on('error', err => logger.error('[RATE-LIMIT] Redis error', err));
-    await client.connect();
-    redisStore = new RedisStore({
-      client,
-      prefix: 'ratelimit:'
-    });
-  }
-  return redisStore;
-}
+// Centralized Redis for rate-limit
+const RedisStore = require('rate-limit-redis');
+const { getRedis } = require('../config/redis');
+
+// Use shared redisClient
+const redisStore = new RedisStore({
+  client: getRedis(),
+  prefix: 'ratelimit:'
+});
+
 
 
 function rateLimitHandler(req, res) {
