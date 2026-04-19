@@ -1,19 +1,17 @@
 'use strict';
 
 const multer = require('multer');
-const { upload } = require('../config/multer');
+const { photo, logo, service } = require('../config/multer');
 const { upload: uploadCfg } = require('../config/env');
 
-// ─────────────────────────────────────────────
-// Wrapper Multer propre
-// ─────────────────────────────────────────────
-
+/**
+ * WRAPPER MULTER
+ */
 function wrapMulter(multerMiddleware, fieldName) {
   return (req, res, next) => {
     multerMiddleware(req, res, (err) => {
       if (!err) return next();
 
-      // Multer errors
       if (err instanceof multer.MulterError) {
         const errors = {
           LIMIT_FILE_SIZE: {
@@ -24,20 +22,19 @@ function wrapMulter(multerMiddleware, fieldName) {
           LIMIT_UNEXPECTED_FILE: {
             status: 400,
             code: 'UNEXPECTED_FILE_FIELD',
-            message: `Champ attendu : ${fieldName}`,
+            message: `Champ attendu: ${fieldName}`,
           },
         };
 
-        const error = errors[err.code];
+        const e = errors[err.code];
 
-        return res.status(error?.status || 400).json({
+        return res.status(e?.status || 400).json({
           success: false,
-          message: error?.message || err.message,
-          code: error?.code || 'UPLOAD_ERROR',
+          message: e?.message || err.message,
+          code: e?.code || 'UPLOAD_ERROR',
         });
       }
 
-      // MIME error
       if (err?.message?.includes('MIME')) {
         return res.status(415).json({
           success: false,
@@ -55,18 +52,18 @@ function wrapMulter(multerMiddleware, fieldName) {
   };
 }
 
-// ─────────────────────────────────────────────
-// Upload middlewares
-// ─────────────────────────────────────────────
+/**
+ * =========================
+ * EXPORT MIDDLEWARES
+ * =========================
+ */
+const handlePhotoUpload = wrapMulter(photo.single('photo'), 'photo');
+const handleLogoUpload = wrapMulter(logo.single('logo'), 'logo');
+const handleServiceUpload = wrapMulter(service.single('image'), 'image');
 
-const handlePhotoUpload   = wrapMulter(upload.photo, 'photo');
-const handleLogoUpload    = wrapMulter(upload.logo, 'logo');
-const handleServiceUpload = wrapMulter(upload.service, 'image');
-
-// ─────────────────────────────────────────────
-// Path normalisation (DB safe)
-// ─────────────────────────────────────────────
-
+/**
+ * PATH CLEAN DB
+ */
 function getRelativePath(req) {
   if (!req.file) return null;
 
