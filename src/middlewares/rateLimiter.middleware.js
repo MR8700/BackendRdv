@@ -2,13 +2,12 @@
 
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
-
 const { rateLimit: rateCfg } = require('../config/env');
 const { getRedis } = require('../config/redis');
 
 /**
  * =========================
- * RATE LIMIT HANDLER
+ * HANDLER GLOBAL
  * =========================
  */
 function rateLimitHandler(req, res) {
@@ -22,36 +21,39 @@ function rateLimitHandler(req, res) {
 
 /**
  * =========================
- * REDIS STORE (CUSTOM)
+ * FACTORY STORE REDIS
  * =========================
- * Remplace rate-limit-redis (source de bugs)
+ * IMPORTANT : 1 instance par limiter
  */
-const redisStore = {
-  async increment(key) {
-    const redis = getRedis();
+function createRedisStore(prefix) {
+  return {
+    async increment(key) {
+      const redis = getRedis();
+      const fullKey = `${prefix}:${key}`;
 
-    const current = await redis.incr(key);
+      const current = await redis.incr(fullKey);
 
-    if (current === 1) {
-      await redis.expire(key, Math.floor(rateCfg.windowMs / 1000));
-    }
+      if (current === 1) {
+        await redis.expire(fullKey, Math.floor(rateCfg.windowMs / 1000));
+      }
 
-    return {
-      totalHits: current,
-      resetTime: new Date(Date.now() + rateCfg.windowMs),
-    };
-  },
+      return {
+        totalHits: current,
+        resetTime: new Date(Date.now() + rateCfg.windowMs),
+      };
+    },
 
-  async decrement(key) {
-    const redis = getRedis();
-    await redis.decr(key);
-  },
+    async decrement(key) {
+      const redis = getRedis();
+      await redis.decr(`${prefix}:${key}`);
+    },
 
-  async resetKey(key) {
-    const redis = getRedis();
-    await redis.del(key);
-  },
-};
+    async resetKey(key) {
+      const redis = getRedis();
+      await redis.del(`${prefix}:${key}`);
+    },
+  };
+}
 
 /**
  * =========================
@@ -59,7 +61,7 @@ const redisStore = {
  * =========================
  */
 const authLimiter = rateLimit({
-  store: redisStore,
+  store: createRedisStore('auth'),
   windowMs: rateCfg.windowMs,
   max: rateCfg.maxAuth,
 
@@ -69,7 +71,7 @@ const authLimiter = rateLimit({
 
   keyGenerator: (req) => {
     const login = req.body?.login || 'unknown';
-    return `auth:${ipKeyGenerator(req)}:${login}`;
+    return `${ipKeyGenerator(req)}:${login}`;
   },
 
   handler: rateLimitHandler,
@@ -81,7 +83,7 @@ const authLimiter = rateLimit({
  * =========================
  */
 const apiLimiter = rateLimit({
-  store: redisStore,
+  store: createRedisStore('api'),
   windowMs: rateCfg.windowMs,
   max: rateCfg.maxApi,
 
@@ -99,7 +101,7 @@ const apiLimiter = rateLimit({
  * =========================
  */
 const uploadLimiter = rateLimit({
-  store: redisStore,
+  store: createRedisStore('upload'),
   windowMs: rateCfg.windowMs,
   max: 20,
 
