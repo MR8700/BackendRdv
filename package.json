@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cls-hooked": "^4.2.2",
     "compression": "^1.8.1",
     "connect-redis": "^7.1.1",
     "cors": "^2.8.6",
