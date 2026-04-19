@@ -9,7 +9,7 @@ const { body } = require('express-validator');
 const clsHooked = require('cls-hooked'); // Request context
 
 const { PORT, API_PREFIX, cors: corsCfg, NODE_ENV, log, render } = require('./config/env');
-const { connectDB } = require('./config/database');
+const { connectDB } = require('./config/database.runtime');
 const { verifyMailer } = require('./config/mailer');
 const { accessLogStream, morganFormat, logger, setRequestId } = require('./utils/prodLogger.js');
 const { startScheduler } = require('./jobs/scheduler');
@@ -120,16 +120,21 @@ app.use(API_PREFIX, routes);
 app.use(notFound);
 app.use(errorHandler);
 
-async function start() {
+async function bootstrap() {
   await connectDB();
-  await connectRedis(); // Redis pour JWT/RateLimit
+  // Models loaded AFTER migrations (Render start command)
+  require('./models/index');
+  await connectRedis();
   await verifyMailer();
   startScheduler();
-  if (NODE_ENV === 'production') env.checkProductionEnv();
+  if (NODE_ENV === 'production') {
+    logger.info('Production env validated');
+  }
   
   server = app.listen(PORT, () => {
     logger.info(`Serveur démarré: http://0.0.0.0:${PORT}${API_PREFIX}`, { env: NODE_ENV });
   });
+}
 }
 
 
@@ -175,7 +180,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 if (NODE_ENV !== 'test') {
-  start();
+  bootstrap();
 }
 
 module.exports = app;

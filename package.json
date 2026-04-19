@@ -4,7 +4,7 @@
   "description": "API Backend Clinique - Production Ready (Render)",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
+"start": "npx sequelize-cli db:migrate && node src/app.js",
     "dev": "nodemon src/app.js",
     "build": "npm ci --only=prod && npm prune --prod",
     "prod:check": "node -e \"require('./src/config/env').checkProductionEnv()\"",

@@ -5,7 +5,7 @@ const path = require('path');
 // dotenv disabled in production - use platform env vars only
 // dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const { NODE_ENV = 'development' } = process.env;
+const NODE_ENV = process.env.NODE_ENV || 'production';
 
 const REQUIRED_VARS_DEV = [
   'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'JWT_SECRET', 'JWT_EXPIRES_IN',

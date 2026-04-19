@@ -2,16 +2,10 @@
 
 const path = require('path');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Configuration sequelize-cli
-// Permet d'exécuter les migrations depuis la racine du projet :
-//   npx sequelize-cli db:migrate
-//   npx sequelize-cli db:seed:all
-// ─────────────────────────────────────────────────────────────────────────────
-
 module.exports = {
-  config          : path.resolve('src', 'config', 'database.js'),
-  'models-path'   : path.resolve('src', 'models'),
-  'seeders-path'  : path.resolve('src', 'database', 'seeders'),
-  'migrations-path': path.resolve('src', 'database', 'migrations'),
+  "config": "./config/config.js",
+  "models-path": "./src/models",
+  "seeders-path": "./database/seeders",
+  "migrations-path": "./database/migrations"
 };
+
