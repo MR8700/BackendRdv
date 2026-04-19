@@ -4,13 +4,12 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
 
 const { rateLimit: rateCfg } = require('../config/env');
-const logger = require('../utils/prodLogger').logger;
-
-const RedisStore = require('rate-limit-redis');
 const { getRedis } = require('../config/redis');
 
 /**
- * Global handler
+ * =========================
+ * RATE LIMIT HANDLER
+ * =========================
  */
 function rateLimitHandler(req, res) {
   return res.status(429).json({
@@ -22,19 +21,48 @@ function rateLimitHandler(req, res) {
 }
 
 /**
- * Redis store instance
+ * =========================
+ * REDIS STORE (CUSTOM)
+ * =========================
+ * Remplace rate-limit-redis (source de bugs)
  */
-const redisStore = new RedisStore({
-  sendCommand: (...args) => getRedis().sendCommand(args),
-});
+const redisStore = {
+  async increment(key) {
+    const redis = getRedis();
+
+    const current = await redis.incr(key);
+
+    if (current === 1) {
+      await redis.expire(key, Math.floor(rateCfg.windowMs / 1000));
+    }
+
+    return {
+      totalHits: current,
+      resetTime: new Date(Date.now() + rateCfg.windowMs),
+    };
+  },
+
+  async decrement(key) {
+    const redis = getRedis();
+    await redis.decr(key);
+  },
+
+  async resetKey(key) {
+    const redis = getRedis();
+    await redis.del(key);
+  },
+};
 
 /**
+ * =========================
  * AUTH LIMITER
+ * =========================
  */
 const authLimiter = rateLimit({
   store: redisStore,
   windowMs: rateCfg.windowMs,
   max: rateCfg.maxAuth,
+
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
@@ -48,12 +76,15 @@ const authLimiter = rateLimit({
 });
 
 /**
+ * =========================
  * API LIMITER
+ * =========================
  */
 const apiLimiter = rateLimit({
   store: redisStore,
   windowMs: rateCfg.windowMs,
   max: rateCfg.maxApi,
+
   standardHeaders: true,
   legacyHeaders: false,
 
@@ -63,12 +94,15 @@ const apiLimiter = rateLimit({
 });
 
 /**
+ * =========================
  * UPLOAD LIMITER
+ * =========================
  */
 const uploadLimiter = rateLimit({
   store: redisStore,
   windowMs: rateCfg.windowMs,
   max: 20,
+
   standardHeaders: true,
   legacyHeaders: false,
 
