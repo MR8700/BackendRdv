@@ -1,36 +1,55 @@
 {
-  "name": "backend",
+  "name": "backend-clinique",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "API Backend Clinique - Production Ready (Render)",
+  "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "build": "npm ci --only=prod && npm prune --prod",
+    "prod:check": "node -e \"require('./src/config/env').checkProductionEnv()\"",
     "db:sync": "node -e \"require('./src/config/database').syncDB({ alter: true }).then(() => process.exit(0))\"",
-    "db:seed": "node src/database/seed.js"
+    "db:seed": "node src/database/seed.js",
+    "logs:rotate": "node scripts/rotate-logs.js"
   },
-  "keywords": [],
+  "keywords": [
+    "clinique",
+    "rdv",
+    "api",
+    "sequelize",
+    "express",
+    "render"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
+    "connect-redis": "^7.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
+    "express-validator": "^7.2.0",
     "helmet": "^8.1.0",
     "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
-    "mailtrap": "^4.5.0",
+    "mailtrap": "^3.1.1",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
     "mysql2": "^3.20.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^8.0.5",
+    "redis": "^4.7.0",
     "sequelize": "^6.37.8",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "winston": "^3.15.0",
+    "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",

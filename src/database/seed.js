@@ -1,6 +1,6 @@
 'use strict';
 
-require('dotenv').config();
+ // dotenv disabled - use environment variables (seed only for dev now)
 const { sequelize, connectDB } = require('../config/database');
 const { hashPassword } = require('../utils/hash.util');
 

@@ -2,7 +2,27 @@
 
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
-const { rateLimit: rateCfg } = require('../config/env');
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+const { rateLimit: rateCfg, render } = require('../config/env');
+const logger = require('../utils/prodLogger').logger;
+
+let redisStore;
+
+async function getRedisStore() {
+  if (!redisStore) {
+    const Redis = require('redis');
+    const client = Redis.createClient({ url: render.redisUrl });
+    client.on('error', err => logger.error('[RATE-LIMIT] Redis error', err));
+    await client.connect();
+    redisStore = new RedisStore({
+      client,
+      prefix: 'ratelimit:'
+    });
+  }
+  return redisStore;
+}
+
 
 function rateLimitHandler(req, res) {
   return res.status(429).json({
@@ -14,16 +34,17 @@ function rateLimitHandler(req, res) {
 }
 
 const authLimiter = rateLimit({
-  windowMs             : rateCfg.windowMs,
-  max                  : rateCfg.maxAuth,
-  standardHeaders      : true,
-  legacyHeaders        : false,
+  store: await getRedisStore(),
+  windowMs: rateCfg.windowMs,
+  max: rateCfg.maxAuth,
+  message: rateLimitHandler,
+  standardHeaders: true,
+  legacyHeaders: false,
   skipSuccessfulRequests: true,
-  keyGenerator         : (req) => {
+  keyGenerator: (req) => {
     const login = req.body?.login || 'unknown';
     return `auth:${ipKeyGenerator(req)}:${login}`;
-  },
-  handler: rateLimitHandler,
+  }
 });
 
 const apiLimiter = rateLimit({

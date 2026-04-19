@@ -5,11 +5,13 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const compression = require('compression');
+const { body } = require('express-validator');
+const clsHooked = require('cls-hooked'); // Request context
 
-const { PORT, API_PREFIX, cors: corsCfg, NODE_ENV } = require('./config/env');
+const { PORT, API_PREFIX, cors: corsCfg, NODE_ENV, log, render } = require('./config/env');
 const { connectDB } = require('./config/database');
 const { verifyMailer } = require('./config/mailer');
-const { accessLogStream, morganFormat, logger } = require('./utils/logger.util');
+const { accessLogStream, morganFormat, logger, setRequestId } = require('./utils/prodLogger.js');
 const { startScheduler } = require('./jobs/scheduler');
 const { apiLimiter } = require('./middlewares/rateLimiter.middleware');
 const { notFound, errorHandler } = require('./middlewares/errorHandler.middleware');
@@ -17,7 +19,31 @@ const { notFound, errorHandler } = require('./middlewares/errorHandler.middlewar
 const app = express();
 let server;
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      'style-src': ["'self'", "'unsafe-inline'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+  permissionsPolicy: {
+    accelerometer: [],
+    camera: [],
+    geolocation: [],
+    gyroscope: [],
+    magnetometer: [],
+    microphone: [],
+    payment: [],
+    usb: [],
+  },
+})); 
 app.use(
   cors({
     origin: corsCfg.origins,
@@ -31,13 +57,30 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(compression());
 
+// Request ID middleware
+app.use(require('./middlewares/requestId.middleware'));
+
+// Global sanitize (xss protection)
+app.use((req, res, next) => {
+  if (req.body) {
+    Object.keys(req.body).forEach(key => {
+      if (typeof req.body[key] === 'string') {
+        req.body[key] = require('xss')(req.body[key]);
+      }
+    });
+  }
+  next();
+});
+
 app.use(
   morgan(morganFormat, {
     stream: NODE_ENV === 'production' ? accessLogStream : process.stdout,
   })
 );
 
-app.use('/uploads', express.static('uploads'));
+// Dynamic uploads path for Render Disks
+const uploadsPath = NODE_ENV === 'production' ? render.diskPath : 'uploads';
+app.use('/uploads', express.static(uploadsPath));
 app.use(API_PREFIX, apiLimiter);
 
 app.get(`${API_PREFIX}/health`, (_req, res) => {

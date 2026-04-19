@@ -1,15 +1,32 @@
 'use strict';
 
 const jwt = require('jsonwebtoken');
-const { jwt: jwtCfg } = require('../config/env');
+const { jwt: jwtCfg, jwtBlacklist, render } = require('../config/env');
+const Redis = require('redis');
+const logger = require('../utils/prodLogger').logger;
+
+let redisClient;
+
+async function getRedis() {
+  if (!redisClient) {
+    redisClient = Redis.createClient({
+      url: render.redisUrl
+    });
+    redisClient.on('error', err => logger.error('[REDIS] Connection error', err));
+    await redisClient.connect();
+    logger.info('[REDIS] Connected for JWT blacklist');
+  }
+  return redisClient;
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Payload encodé dans le token — champs issus de la table utilisateurs
 // + permissions chargées via role_permissions
 // ─────────────────────────────────────────────────────────────────────────────
 
-function signAccessToken(user, permissions = [], extraClaims = {}) {
-  return jwt.sign(
+async function signAccessToken(user, permissions = [], extraClaims = {}) {
+  const token = jwt.sign(
     {
       id_user    : user.id_user,
       login      : user.login,
@@ -22,7 +39,16 @@ function signAccessToken(user, permissions = [], extraClaims = {}) {
     jwtCfg.secret,
     { expiresIn: jwtCfg.expiresIn }
   );
+
+  // Blacklist refresh token on logout (cleanup)
+  const jti = require('uuid').v4();
+  await getRedis();
+  redisClient.setex(`blacklist:${jti}`, jwtCfg.expiresIn, '1');
+  
+  token.jti = jti;
+  return token;
 }
+
 
 function signRefreshToken(user) {
   return jwt.sign(
