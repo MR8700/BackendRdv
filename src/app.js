@@ -17,6 +17,14 @@ const app = express();
 let server;
 
 const PORT_NUM = parseInt(PORT, 10) || 10000;
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Backend RDV API is running 🚀',
+    version: '1.0.0',
+    time: new Date().toISOString(),
+  });
+});
 
 app.use(helmet({
   contentSecurityPolicy: false, // Disable warnings
